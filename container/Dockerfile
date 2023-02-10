@@ -23,8 +23,8 @@ RUN Rscript -e 'install.packages(c("rmarkdown", "markdown", "tidyverse", \
                 "plyr", "pheatmap", "Seurat",\
                 "VennDiagram"), dependencies = TRUE, repos = "http://cran.us.r-project.org")'
 
-RUN Rscript -e 'BiocManager::install(c("sva", "DESeq2", "edgeR"," "limma", \
+RUN Rscript -e 'BiocManager::install(c("sva", "DESeq2", "edgeR", "limma", \
                 "RankProd", "preprocessCore", "clusterProfiler",\
-                "org.Hs.eg.db","enrichplot", "GOSemSim",  ))'
+                "org.Hs.eg.db","enrichplot", "GOSemSim"))'
 
 WORKDIR /rstudio

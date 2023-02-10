@@ -43,12 +43,12 @@ Use the outputs from the notebook to obtain the pseudobulks as inputs of the DEG
 
 Clone the repo and buil the container or
 ```
-docker pull vergaju/test_dge
+docker pull vergaju/test_deg
 ```
 
 Usage:
 ```
-docker run --rm -p 8888:8787 -e PASSWORD=pass -v $(pwd):/home/rstudio vergaju/test_dge
+docker run --rm -p 8888:8787 -e PASSWORD=pass -v $(pwd):/home/rstudio vergaju/test_deg
 ```
 
 Open your browser at the address: 'localhost:8888', login with:
