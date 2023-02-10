@@ -1,0 +1,219 @@
+---
+title: "DEG_final"
+author: "Jacopo Umberto Verga"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# DGE with Seurat
+
+## Multiple Myeloma
+
+THe test with different alogirthms identified seurat as best method. Now I am going to run the DGE analysis with min.pct of cells as 0.25, logistic regression, correcting for the different batches:
+
+```{r message=FALSE, warning=FALSE}
+library(Seurat)
+library(tidyverse)
+library(clusterProfiler)
+library(org.Hs.eg.db) 
+library(enrichplot)
+library(GOSemSim)
+library(VennDiagram)
+
+dat <- readRDS("mm_nk.Rds")
+dat = SetIdent(dat, value = "new_label")
+dat
+```
+
+
+### normalise the data
+
+```{r message=FALSE, warning=FALSE}
+dat <- NormalizeData(dat,  normalization.method = "LogNormalize")
+```
+### DGE analysis
+
+```{r message=FALSE, warning=FALSE}
+dat_logreg <- FindAllMarkers(dat, test.use = "LR", min.pct = 0.25,logfc.threshold=0, latent.vars = "batch")
+#dat_logreg2 <- filter_DE(dat_logreg, 0)
+
+#extract genes
+mm_logreg_exh <- dat_logreg[dat_logreg$cluster == "NK exhausted",] %>%
+  mutate(fdr = p.adjust(p_val, method = "fdr")) %>%
+  filter(fdr < 0.05)
+  
+mm_logreg_res <- dat_logreg[dat_logreg$cluster == "NK resident",] %>%
+  mutate(fdr = p.adjust(p_val, method = "fdr")) %>%
+  filter(fdr < 0.05)
+
+print("DE genes NK exhausted")
+dim(mm_logreg_exh)
+print("DE genes NK resident")
+dim(mm_logreg_res)
+```
+
+
+### GO enrichment analysis
+
+```{r}
+
+
+GO <- enrichGO(mm_logreg_exh$gene, org.Hs.eg.db, 
+               keyType = "SYMBOL", ont="BP",
+               pAdjustMethod = "fdr",
+               readable="False")
+
+GO <- simplify(GO, cutoff=0.7, by="p.adjust", select_fun = min,measure = "Wang" )
+
+mmGOresult <- GO@result %>%
+  filter(p.adjust < 0.05)
+dim(mmGOresult)
+
+dotplot(GO)
+goplot(GO)
+
+
+```
+
+### Save files
+
+```{r}
+write_csv(mm_logreg_exh, "mm_exhausted.csv")
+write_csv(mm_logreg_res, "mm_residemt.csv")
+write_csv(mmGOresult, "mm_GO.csv")
+```
+
+
+```{r}
+dat <- readRDS("healthy_nk.Rds")
+dat = SetIdent(dat, value = "new_label")
+dat
+
+```
+
+# normalise the data
+
+```{r message=FALSE, warning=FALSE}
+dat <- NormalizeData(dat,  normalization.method = "LogNormalize")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+dat_logreg <- FindAllMarkers(dat, test.use = "LR", min.pct = 0.25,logfc.threshold=0, latent.vars = "batch")
+#dat_logreg2 <- filter_DE(dat_logreg, 0)
+
+#extract genes
+ht_logreg_exh <- dat_logreg[dat_logreg$cluster == "NK exhausted",] %>%
+  mutate(fdr = p.adjust(p_val, method = "fdr")) %>%
+  filter(fdr < 0.05)
+
+ht_logreg_res <- dat_logreg[dat_logreg$cluster == "NK resident",] %>%
+  mutate(fdr = p.adjust(p_val, method = "fdr")) %>%
+  filter(fdr < 0.05)
+
+print("DE genes NK exhausted")
+dim(ht_logreg_exh)
+print("DE genes NK resident")
+dim(ht_logreg_res)
+
+```
+
+### GO enrichment analysis
+
+```{r}
+
+genes <- ht_logreg_exh$gene
+
+GO <- enrichGO(ht_logreg_exh$gene, org.Hs.eg.db, 
+               keyType = "SYMBOL", ont="BP",
+               pAdjustMethod = "fdr",
+               readable="False")
+
+GO <- simplify(GO, cutoff=0.7, by="p.adjust", select_fun = min,measure = "Wang" )
+
+htGOresult <- GO@result %>%
+  filter(p.adjust < 0.05)
+dim(htGOresult)
+
+dotplot(GO)
+goplot(GO)
+
+
+```
+
+```{r}
+write_csv(ht_logreg_exh, "healthy_exhausted.csv")
+write_csv(ht_logreg_res, "healthy_residemt.csv")
+write_csv(htGOresult, "healthy_GO.csv")
+
+```
+
+
+# Semantic similarity analysis
+
+## Genes
+
+shared or not:
+
+```{r}
+mm <- mm_logreg_exh$gene
+ht <- ht_logreg_exh$gene
+
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(mm, ht),
+        category.names = c("MM", "Healthy"),
+        main = "DEG between exhausted cells MM and healthy samples",
+        main.cex =2,
+        cex=2,
+        cat.cex=1.5,
+        label.col=3,
+        filename = NULL,
+        disable.logging = T
+        )
+grid.draw(venn_object)
+```
+
+
+
+```{r}
+hsGO <- godata(org.Hs.eg.db, keytype= "SYMBOL", ont="BP")
+
+# Genes unique for mm
+
+mm_unique <- setdiff(mm,ht)
+ht_unique <- setdiff(ht,mm)
+
+clusterSim(mm_unique, ht_unique, semData=hsGO, measure="Wang", combine="BMA")
+```
+
+## GOs
+
+```{r}
+mm <- mmGOresult$ID
+ht <- htGOresult$ID
+
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(mm, ht),
+        category.names = c("GO:BP mm-exh", "GO:BP healthy-exh"),
+        main.cex =2,
+        cex=2,
+        cat.cex=1.5,
+        label.col=3,
+        filename = NULL,
+        disable.logging = T
+        )
+grid.draw(venn_object)
+
+# Genes unique for mm
+
+mm_unique <- setdiff(mm,ht)
+ht_unique <- setdiff(ht,mm)
+
+mgoSim(mm_unique, ht_unique, semData=hsGO, measure="Wang", combine="BMA")
+```

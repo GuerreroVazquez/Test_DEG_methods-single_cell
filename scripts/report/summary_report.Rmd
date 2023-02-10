@@ -1,0 +1,111 @@
+---
+title: "summary DGE algorithms"
+author: "Jacopo Umberto Verga"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Summary results DGE expression MM:
+
+
+Full report [here](./report_mm.html)
+
+
+## Single cell methods:
+
+- Scanpy:
+  - DGE: showed poor results with all the methods tested, z-score more reliably for high and low logFC but not for low abs(logFC)
+  - GO tterms are related to immune system 
+  - Result: **DISCARDED**
+- Seurat:
+  - DGE: showed better results, DE genes are appreciable to all logFC levels (T)
+  - GO terms:UP specific for immune activity and MHC-II antigen presentation. Down for cell response
+  -  Result **KEEP, T-test results more clear? anyway very similar**
+
+## Pseudobulk
+
+- DESeq2-LRT: 
+  - DGE:  DE genes expression less clear 
+  - GO terms similar to seurat 
+  - Result: **DISCARD**
+- DESeq2+combat 
+  - DGE: different expression appreciable only for low abs(LogFC) genes
+  - GO: GO terms similar to above. 
+  - Result: **DISCARD**
+- DESeq2 + sva
+  - DGE: DE expression clear for high and low LogFC 
+  - GO: similar to above. Maybe Down more specific?
+  - Result: **KEEP?**
+- limma/limma_combat:
+  - DGE: Small amount of genes, only low abs(logFC) clear 
+  - GO: similar to above 
+  - Result: **DISCARD**
+- edgeR/edgeR_combat:
+  - DGE: clear only low abs(logFC) genes (combat)
+  - GO:  as above 
+  - Result:  **DISCARD**
+- wilcoxon:
+  - DGE: clear only low abs(logFC) genes 
+  - GO:  as above 
+  - Result:  **DISCARD**
+
+# Conclusions
+
+**SingleCell Methods** Scanpy isn’t clear, evaluating the results with the z-score is meaningful and the expression of the genes in the groups is clear but it doesn’t provide a neat way to select the threshold. Seurat performed better with similar result betwee the algorithms. Interstingly, GO terms (similar to all the other methods) found more immune activity in exhausted cells (pathways enriched but inhibited by checkpoints?) and response to various stimuli in residential cells (exhausted cell not receptive to environment?).
+
+**Pseudobulk** In the average DGE genes are less disntinguished. DESeq2 showed appreciable differences for low ans high LogFC and probably better GO terms.
+
+**Seurat and DESeq2 kept (Seurat best candidate)**
+
+
+# Summary results DGE expression Healthy:
+
+
+Full report [here](./report_healthy.html)
+
+
+## Single cell methods:
+
+- Scanpy:
+  - DGE: showed poor results with all the methods tested, z-score more reliably for high and low logFC but not for low abs(logFC). Wilcoxon better identify logFC genes
+  - GO terms are related to immune system and translation regulation
+  - Result: **DISCARDED**
+- Seurat:
+  - DGE: showed better results, DE genes are appreciable to all logFC levels
+  - GO terms:UP specific for immune activity and MHC-II antigen presentation. Down for cell response
+  -  Result **KEEP**
+
+## Pseudobulk
+
+- DESeq2-LRT: 
+  - DGE:  DE genes expression not clear 
+  - GO Up terms not found, down terms similar to seurat 
+  - Result: **DISCARD**
+- DESeq2+combat 
+  - DGE: DE genes expression not clear 
+  - GO: GO terms similar to above. 
+  - Result: **DISCARD**
+- DESeq2 + sva
+  - DGE: DE genes expression not clear 
+  - GO: similar to above?
+  - Result: **DISCARD**
+- limma/limma_combat:
+  - DGE: High LogFC not clear
+  - GO:  Up as above, down relative to translation regulation 
+  - Result: **DISCARD**
+- edgeR/edgeR_combat:
+  - DGE: High LogFC not clear
+  - GO:  Up as above, down relative to translation regulation 
+  - Result:  **DISCARD**
+- wilcoxon:
+  - DGE: not clear 
+  - GO:  not found downregulated pathways, UP correlated to imune response
+  - Result:  **DISCARD**
+
+# Conclusions
+
+**SingleCell Methods** Scanpy isn’t clear, evaluating the results with the z-score is meaningful and the expression of the genes in the groups is clear but it doesn’t provide a neat way to select the threshold. The wilcoxon method looks more clear. Seurat performed better with similar result between the algorithms. Interstingly, GO terms (similar to all the other methods) found more immune activity in exhausted cells (pathways enriched but inhibited by checkpoints?) and response to various stimuli in residential cells (exhausted cell not receptive to environment?).
+
+**Pseudobulk** In the average DGE genes are less disntinguished. 
+
+**Seurat is the final winner**

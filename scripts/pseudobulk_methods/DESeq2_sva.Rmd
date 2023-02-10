@@ -1,0 +1,158 @@
+---
+title: "sve_DESeq2"
+author: "Jacopo Umberto Verga"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# DESeq2
+
+Test perforamces DESeq2 with the pseudobulk counts obtained previously corrected by the batch effect using sva.
+
+
+```{r message=FALSE, warning=FALSE}
+library(sva)
+library(plyr)
+library(DESeq2)
+library(tidyverse)
+library(pheatmap)
+library(RColorBrewer)
+```
+
+Load counts and experiment design
+
+```{r message=FALSE, warning=FALSE}
+counts <- read.csv("Pseudobulk_clean_mm.csv", row.names = "Symbol")
+exp_design <- read.csv("Experiment_design_mm.csv", row.names = "Sample")
+```
+
+```{r message=FALSE, warning=FALSE}
+cts <- as.matrix(counts)
+
+exp_design$Condition <- factor(exp_design$Condition)
+exp_design$Batch <- factor(exp_design$Batch)
+
+#batches_unique = unique(sort(exp_design$Batch))
+#batches = exp_design$Batch
+#batches <- mapvalues(batches, from = batches_unique, to = c (1, 2, 3, 4, 5, 6))
+
+#exp_design$batch_num <- batches
+#todrop = rownames(exp_design[exp_design$batch_num == 3,])
+#exp_design <- exp_design[!(row.names(exp_design) %in% todrop),]
+#cts <- cts[,colnames(cts)!= todrop]
+#batches = exp_design$batch_num
+#batches <- as.numeric(batches)
+```
+
+
+```{r}
+all(rownames(exp_design) %in% colnames(cts))
+all(rownames(exp_design) == colnames(cts))
+```
+```{r message=FALSE, warning=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                              colData = exp_design,
+                              design = ~ Condition)
+
+
+```
+
+```{r message=FALSE, warning=FALSE}
+vsdata <- vst(dds, nsub = 500, blind=FALSE)
+plotPCA(vsdata, intgroup = "Condition")
+```
+
+```{r message=FALSE, warning=FALSE}
+vsdata_mat <- assay(vsdata)
+vsdata_corr <- cor(vsdata_mat)
+# Plot heatmap
+pheatmap(vsdata_corr, annotation = exp_design[, c("Condition"), drop=F])
+```
+
+```{r message=FALSE, warning=FALSE}
+dds$Condition <- factor(dds$Condition, levels = c("NK_resident","NK_exhausted"))
+
+dds <- DESeq(dds, test="Wald")
+```
+
+```{r}
+dat  <- counts(dds, normalized = TRUE)
+idx  <- rowMeans(dat) > 1
+dat  <- dat[idx, ]
+mod  <- model.matrix(~ Condition, colData(dds))
+mod0 <- model.matrix(~   1, colData(dds))
+svseq <- svaseq(dat, mod, mod0, n.sv = 2)
+```
+```{r}
+par(mfrow = c(2, 1), mar = c(3,5,3,1))
+for (i in 1:2) {
+  stripchart(svseq$sv[, i] ~ dds$Batch, vertical = TRUE, main = paste0("SV", i))
+  abline(h = 0)
+ }
+
+```
+```{r}
+ddssva <- dds
+ddssva$SV1 <- svseq$sv[,1]
+ddssva$SV2 <- svseq$sv[,2]
+design(ddssva) <- ~ SV1 + SV2 + Condition
+```
+
+
+
+```{r}
+dds <- DESeq(ddssva, test="LRT", reduced = ~ Condition)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+res <- results(dds)
+
+sig_res <- subset(res, padj < 0.05 & abs(log2FoldChange) >= 0.3)
+res_tbl <- res %>%
+        data.frame() %>%
+        rownames_to_column(var="gene") %>%
+        as_tibble()
+
+sig_res_tbl <- sig_res %>%
+        data.frame() %>%
+        rownames_to_column(var="gene") %>%
+        as_tibble()
+
+
+
+dim(res_tbl)
+dim(sig_res_tbl)
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+plotDispEsts(dds)
+```
+
+```{r message=FALSE, warning=FALSE}
+## Obtain logical vector where TRUE values denote padj values < 0.05 and fold change > 1.5 in either direction
+res_table_thres <- res_tbl %>% 
+                  mutate(threshold = padj < 0.05 & abs(log2FoldChange) >= 0.3)
+                  
+## Volcano plot
+ggplot(res_table_thres) +
+    geom_point(aes(x = log2FoldChange, y = -log10(padj), colour = threshold)) +
+    ggtitle("Volcano plot of stimulated B cells relative to control") +
+    xlab("log2 fold change") + 
+    ylab("-log10 adjusted p-value") +
+    scale_y_continuous(limits = c(0,50)) +
+    theme(legend.position = "none",
+          plot.title = element_text(size = rel(1.5), hjust = 0.5),
+          axis.title = element_text(size = rel(1.25))) 
+```
+```{r message=FALSE, warning=FALSE}
+write_csv(sig_res_tbl, "DESeq2_sva_mm.csv")
+```
+
+

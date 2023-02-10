@@ -1,0 +1,665 @@
+---
+title: "Analysis DGE algorithms MM"
+author: "Jacopo Umberto Verga"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(Seurat)
+library(tidyverse)
+library(VennDiagram)
+library(clusterProfiler)
+library(org.Hs.eg.db) 
+dat <- readRDS("mm_nk.Rds")
+dat <- SetIdent(dat, value="new_label")
+dat <- NormalizeData(dat)
+```
+
+
+# Evaluation DGE algorithms
+
+All the results were filtered by the adj.p-value < 0.05 and logFC >= 0.3
+
+
+```{r echo=FALSE}
+dat
+```
+
+# Single cell methods:
+
+For single cell methods I am going to consider both Seurat and Scanpy
+
+## Scanpy
+
+[here](scanpy/DGE_mm.html)
+
+For Scanpy I take in account the methods:
+- t-test_overestim_var
+- wilcoxon
+
+Unfortunately the logistic regression provided by scanpy does not give LogFoldChanges and will not be taken in account.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+scanpy_t = read.csv("scanpy/DEG_mm_t.csv")
+scanpy_t$X <- NULL
+scanpy_wx <- read.csv("scanpy/DEG_mm_wx.csv")
+scanpy_wx$X <- NULL
+
+num_genes <- data.frame(matrix(ncol = 2, nrow = 0))  
+colnames(num_genes) <- c("Method", "nGenes")
+
+newrow <- c("scanpy_t", dim(scanpy_t)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+newrow <- c("scanpy_wx", dim(scanpy_wx)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+plot_genes <- function(num_genes){
+  num_genes$nGenes = as.integer(num_genes$nGenes)
+ggplot(num_genes, aes(x=Method, y=nGenes, fill=Method))+
+  geom_bar(stat="identity",width = 0.5)+
+  geom_text(aes(label=nGenes), vjust=1.6, color="white", size=3.5)+
+  theme_minimal()
+}
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_genes(num_genes)
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(scanpy_t$Symbol, scanpy_wx$Symbol),
+        category.names = c("scanpy_t", "scanpy_wx"),
+        filename = NULL,
+        disable.logging=T
+        )
+grid.draw(venn_object)
+```
+
+The t-test_overestim_var recognized as significative almost all the genes and include almost all the genes from the wilcoxon test. Nolw let's evaluate the expression of the genes. 
+
+
+### Scanpy T-test
+
+Top upregulated genes in Exhausted NK cells:
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+plot_top_genes <- function(data, column){
+  max_lfc <- data[order(-data[column]),] %>%
+  head(3) 
+
+  max_lfc <- max_lfc$Symbol
+
+  RidgePlot(dat, features = max_lfc)
+}
+
+plot_top_genes(scanpy_t,"logfoldchanges")
+```
+
+Top downregulated genes in Exhausted NK cells:
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+plot_bottom_genes <- function(data, column){
+  max_lfc <- data[order(-data[column]),] %>%
+  tail(3) 
+
+  max_lfc <- max_lfc$Symbol
+
+  RidgePlot(dat, features = max_lfc)
+}
+
+plot_bottom_genes(scanpy_t,"logfoldchanges")
+```
+
+Genes with lower abs(logFC)
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+plot_low_genes <- function(data,column){
+  max_lfc <- data[order(-data[column]),] %>%
+  tail(3) 
+
+  max_lfc <- max_lfc$Symbol
+
+  RidgePlot(dat, features = max_lfc)
+}
+
+plot_low_genes(scanpy_t,"abs_lfc")
+```
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+scanpy_t[scanpy_t$Symbol %in% c("KRT1","ARG1", "LINC00570", "CD72", "ARPP21", "MME"),]
+```
+
+Apparently `Scanpy` has a bias evaluating the logFC of genes that are completely missing in one of the conditions. **But** The genes are correctly plotted in the [report](./scanpy/DGE_mm.html). So I will check the expression by the z-score instead of the LogFC:
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE}
+
+print("Top upregulated genes")
+
+plot_top_genes(scanpy_t,"scores")
+print("Top downregulated genes")
+
+plot_bottom_genes(scanpy_t,"scores")
+print("lowest abs(LFC) genes")
+
+max_lfc <- scanpy_t[order(-abs(scanpy_t["scores"])),] %>%
+  tail(3) 
+
+max_lfc <- max_lfc$Symbol
+
+RidgePlot(dat, features = max_lfc)
+
+```
+
+Better result for the extremes logFC (scores), but still not clear results for the low scored genes. Indeed those genes are expressed by a small proportion of cells:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+scanpy_t[scanpy_t$Symbol %in% max_lfc,]
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs <- function(data,column){
+upgenes <- data[data[column] > 0,] %>%
+  dplyr::select(Symbol) %>%
+  pull()
+
+upGO <- enrichGO(upgenes, org.Hs.eg.db, keyType = "SYMBOL", ont="BP", pAdjustMethod = "BH", readable="False")
+
+upGO <- simplify(upGO, cutoff=0.7, by="p.adjust", select_fun = min,measure = "Wang")
+
+print("Upregulated GO terms")
+dotplot(upGO)
+}
+
+
+plot_downGOs <- function(data,column){
+downgenes  <- data[data[column] < 0,] %>%
+  dplyr::select(Symbol) %>%
+  pull()
+
+downGO <- enrichGO(downgenes, org.Hs.eg.db, keyType = "SYMBOL", ont="BP", pAdjustMethod = "BH", readable="False")
+
+downGO <- simplify(downGO, cutoff=0.7, by="p.adjust", select_fun = min,measure = "Wang")
+
+print("Downregulated GO terms")
+dotplot(downGO)
+}
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(scanpy_t, "scores")
+plot_downGOs(scanpy_t, "scores")
+
+```
+
+
+GO terms can be linked to immune cell activity, down terms (up for resident NK cells) are correlated to immune activation.
+
+### Scanpy wilcoxon
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(scanpy_wx,"logfoldchanges")
+print("Top downregulated genes")
+
+plot_bottom_genes(scanpy_wx,"logfoldchanges")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(scanpy_wx,"abs_lfc")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+plot_upGOs(scanpy_wx, "scores")
+plot_downGOs(scanpy_wx, "scores")
+
+```
+
+
+Better differentially expressed genes. GO looks quite similar.
+
+## Seurat
+
+[here](seurat/mm_nk.html)
+
+For Seurat I take in account the methods:
+- t-test
+- wilcoxon
+- logistic regression
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+seurat_t <- read_csv("seurat/t-test_seurat_mm.csv")%>%
+  filter(cluster == "NK exhausted")
+names(seurat_t)[names(seurat_t) == 'gene'] <- 'Symbol'
+
+newrow <- c("seurat_t", dim(seurat_t)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+seurat_wx <- read_csv("seurat/wilcoxon_seurat_mm.csv")%>%
+  filter(cluster == "NK exhausted")
+names(seurat_wx)[names(seurat_wx) == 'gene'] <- 'Symbol'
+
+newrow <- c("seurat_wx", dim(seurat_wx)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+seurat_logreg <- read_csv("seurat/wilcoxon_seurat_mm.csv")%>%
+  filter(cluster == "NK exhausted")
+names(seurat_logreg)[names(seurat_logreg) == 'gene'] <- 'Symbol'
+
+newrow <- c("seurat_logreg", dim(seurat_logreg)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+plot_genes(num_genes)
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(seurat_t$Symbol, seurat_wx$Symbol, seurat_logreg$Symbol),
+        category.names = c("seurat_t", "seurat_wx", "seurat_logreg"),
+        filename = NULL
+        )
+grid.draw(venn_object)
+```
+
+Similar numbers of DE genes were found by Seurat's different flavours.
+
+
+
+### Seurat T test
+
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(seurat_t,"avg_log2FC")
+print("Top downregulated genes")
+
+plot_bottom_genes(seurat_t,"avg_log2FC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(seurat_t,"abs_lfc")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+plot_upGOs(seurat_t, "avg_log2FC")
+plot_downGOs(seurat_t, "avg_log2FC")
+```
+
+Better result with seurat, the differences of expression are small (same cell types, just  different state). In average the different gene expression is better appreciable
+
+Enriched GO terms from upregulated genes are specific of immune activation. Downregulated GO terms are inherent to response to various factor, could it be a hint of the missing response to the cancer cell in exhausted NK cell?
+
+### Seurat wilcoxon
+
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(seurat_wx,"avg_log2FC")
+print("Top downregulated genes")
+
+plot_bottom_genes(seurat_wx,"avg_log2FC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(seurat_wx,"abs_lfc")
+
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(seurat_wx, "avg_log2FC")
+plot_downGOs(seurat_wx, "avg_log2FC")
+```
+
+Similar to the previous
+
+### Seurat logreg
+
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(seurat_logreg,"avg_log2FC")
+print("Top downregulated genes")
+
+plot_bottom_genes(seurat_logreg,"avg_log2FC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(seurat_logreg,"abs_lfc")
+
+```
+
+
+As above.
+
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+unique_wx = setdiff(seurat_logreg$Symbol,seurat_t$Symbol)
+seurat_logreg[seurat_logreg$Symbol %in% unique_wx,]
+RidgePlot(dat, features = unique_wx)
+VlnPlot(dat, features = unique_wx, group.by = "bioprojects", split.by = "new_label")
+```
+
+
+
+```{r eval=FALSE, fig.height=10, fig.width=15, message=FALSE, warning=FALSE, include=FALSE}
+unique_t = setdiff(seurat_t$Symbol,seurat_logreg$Symbol)
+seurat_t[seurat_t$Symbol %in% unique_t,]
+RidgePlot(dat, features = unique_t)
+VlnPlot(dat, features = unique_t, group.by = "bioprojects", split.by = "new_label", ncol = 2)
+```
+
+
+# Pseudobulk
+
+In the pseudobulks, counts were summed for each celltype and sample, in practice obtaining a column of counts for each celltype and sample. Then, genes that weren't showing counts in more than 90% of the cells were removed. Also, genes showing expression below 10 counts in all the pseudobulks were removed (pseudobulks are the sum of cells counts. showing less than 10 counts indicate almost all the cells didn't had count's for that gene).
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pseudobulk = read_csv("pseudobulk/Pseudobulk_clean_mm.csv")
+dim(pseudobulk)
+```
+
+
+## DESeq2
+
+For DESeq2, firstly I run it with the "LRT" methods that showed better results [here](https://www.nature.com/articles/s41467-021-25960-2). The PCA plot looks good but the clustering mix some samples [here](./pseudobulk/DESeq2_mm.html). I run DESeq2 specifing the model to take account of the batches. 
+
+Then, I tested `combat_seq` to correct the batch effect [here](./pseudobulk/DESeq2_combat_mm.html). Also, I decided to see if there was a batch effect afrom unknown sources using the single variable analysis (`sva`) [here](./pseudobulk/DESeq2_sva_mm.html).
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+deseq2 <- read_csv("pseudobulk/DESeq2_mm.csv") %>%
+  mutate(abs_lfc = abs(log2FoldChange))
+names(deseq2)[names(deseq2) == 'gene'] <- 'Symbol'
+
+
+newrow <- c("deseq2", dim(deseq2)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+
+deseq2_combat <- read_csv("pseudobulk/DESeq2_combat_mm.csv") %>%
+  mutate(abs_lfc = abs(log2FoldChange))
+names(deseq2_combat)[names(deseq2_combat) == 'gene'] <- 'Symbol'
+
+
+newrow <- c("deseq2_combat", dim(deseq2_combat)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+deseq2_sva <- read_csv("pseudobulk/DESeq2_sva_mm.csv") %>%
+  mutate(abs_lfc = abs(log2FoldChange))
+names(deseq2_sva)[names(deseq2_sva) == 'gene'] <- 'Symbol'
+
+newrow <- c("deseq2_sva", dim(deseq2_sva)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+```
+
+
+
+```{r echo=FALSE, fig.width=10, message=FALSE, warning=FALSE}
+num_genes$nGenes = as.integer(num_genes$nGenes)
+plot_genes(num_genes)
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(deseq2$Symbol, deseq2_combat$Symbol, deseq2_sva$Symbol),
+        category.names = c("deseq2", "deseq2_combat","deseq2_sva"),
+        filename = NULL,
+        disable.logging	=T
+        )
+grid.draw(venn_object)
+```
+
+DESeq2 without batch correction found alomst 500 DE genes, `sva` that corrected by batch effect without prion knowledge found 411. Combat correction found only 37 genes. Around half of the genes found by DESeq2 and DESeq2+sva are shared.
+
+### DESeq2-LRT
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(deseq2,"log2FoldChange")
+print("Top downregulated genes")
+
+plot_bottom_genes(deseq2,"log2FoldChange")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(deseq2,"abs_lfc")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+plot_upGOs(deseq2, "log2FoldChange")
+plot_downGOs(deseq2, "log2FoldChange")
+```
+
+Genes LogFC are slightly appreciable for the expreme values. Genes with low abs(LogFC) are not visible. The Go terms are quite similar to those found with seurat.
+
+
+### DESeq2-combat
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(deseq2_combat,"log2FoldChange")
+print("Top downregulated genes")
+
+plot_bottom_genes(deseq2_combat,"log2FoldChange")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(deseq2_combat,"abs_lfc")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(deseq2_combat, "log2FoldChange")
+plot_downGOs(deseq2_combat, "log2FoldChange")
+```
+
+combat correction better better identified genes with low abs(LogFC) but didn't identified clearly the genes with low LogFC. The Go terms looks less specific for cell response (down).
+
+
+### DESeq2-sva
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(deseq2_sva,"log2FoldChange")
+print("Top downregulated genes")
+
+plot_bottom_genes(deseq2_sva,"log2FoldChange")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(deseq2_sva,"abs_lfc")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(deseq2_sva, "log2FoldChange")
+plot_downGOs(deseq2_sva, "log2FoldChange")
+```
+
+
+Similarly to DESeq2, the genes with abs(LogFC) are not well apreciable. The Down regulated GO terms look more specific to activation of immune cells. 
+
+
+
+
+## limma
+
+Normal and with combat
+
+[limma](pseudobulk/limma_mm.html)
+[limma combat](pseudobulk/limma_combat_mm.html)
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+limma <- read_csv("pseudobulk/limma_voom_mm.csv")
+names(limma)[names(limma) == '...1'] <- 'Symbol'
+
+newrow <- c("limma", dim(limma)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+limma_combat <- read_csv("pseudobulk/limma_combat_mm.csv")
+names(limma_combat)[names(limma_combat) == '...1'] <- 'Symbol'
+
+newrow <- c("limma_combat", dim(limma_combat)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+```
+
+```{r echo=FALSE, fig.width=10, message=FALSE, warning=FALSE}
+plot_genes(num_genes)
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(limma$Symbol, limma_combat$Symbol),
+        category.names = c("limma", "limma_combat"),
+        filename = NULL,
+        disable.logging = T
+        )
+grid.draw(venn_object)
+```
+
+Limma found more than 34 genes, no differences with the batch corrected data
+
+### Limma-voom
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(limma,"logFC")
+print("Top downregulated genes")
+
+plot_bottom_genes(limma,"logFC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(limma,"absFLC")
+```
+
+Low LogFC aren't well apreciable
+
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(limma, "logFC")
+plot_downGOs(limma, "logFC")
+```
+
+GO terms similar to above
+
+
+## EdgeR
+
+I tested edgeR with LRT as best option from  [here](https://www.nature.com/articles/s41467-021-25960-2), I tested combat too.
+[edgeR](./pseudobulk/edgeR_mm.html)
+[edgeR_combat](./pseudobulk/DESeq2_combat_mm.html)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+edger <- read_csv("pseudobulk/edgeR_mm.csv")
+names(edger)[names(edger) == 'genes'] <- 'Symbol'
+
+newrow <- c("edger", dim(edger)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+edger_combat <- read_csv("pseudobulk/edgeR_combat_mm.csv")
+names(edger_combat)[names(edger_combat) == 'genes'] <- 'Symbol'
+
+newrow <- c("edger_combat", dim(edger_combat)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+```
+
+```{r echo=FALSE, fig.height=5, fig.width=15,message=FALSE, warning=FALSE, cache=TRUE}
+plot_genes(num_genes)
+grid.newpage()
+venn_object <- venn.diagram(
+        x = list(edger$Symbol, edger_combat$Symbol),
+        category.names = c("edgeR", "edgeR_combat"),
+        filename = NULL,
+        disable.logging = T
+        )
+grid.draw(venn_object)
+```
+
+Both the methods found more than 9k genes with some hundreds uniquel per each method.
+
+### EdgeR
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(edger,"logFC")
+print("Top downregulated genes")
+
+plot_bottom_genes(edger,"logFC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(edger,"absLFC")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(edger, "logFC")
+plot_downGOs(edger, "logFC")
+```
+
+High and low LogFC aren't clear. Low abs(logFC) are better appreciable.
+BP terms looks similar to other methods
+
+
+### EdgeR_combat
+
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(edger_combat,"logFC")
+print("Top downregulated genes")
+
+plot_bottom_genes(edger_combat,"logFC")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(edger_combat,"absLFC")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(edger_combat, "logFC")
+plot_downGOs(edger_combat, "logFC")
+```
+
+
+DE genes similar to EdgeR.
+BP as above
+
+## Wilcoxon
+
+Tested a non-parametric test with a handwritten wilcoxon test ([inspired from this](https://towardsdatascience.com/deseq2-and-edger-should-no-longer-be-the-default-choice-for-large-sample-differential-gene-8fdf008deae9))
+
+[wilcoxon](pseudobulk/wilcox_mm.html)
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+wilcoxon <- read_csv("pseudobulk/wilcoxon_mm.csv")
+names(wilcoxon)[names(wilcoxon) == '...1'] <- 'Symbol'
+
+newrow <- c("wilcoxon", dim(wilcoxon)[1])
+num_genes[nrow(num_genes) + 1, ] <- newrow
+
+```
+
+```{r echo=FALSE, fig.height=5, fig.width=15,message=FALSE, warning=FALSE, cache=TRUE}
+plot_genes(num_genes)
+```
+```{r echo=FALSE, fig.height=5, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+
+print("Top upregulated genes")
+
+plot_top_genes(wilcoxon,"log2foldChange")
+print("Top downregulated genes")
+
+plot_bottom_genes(wilcoxon,"log2foldChange")
+print("lowest abs(LFC) genes")
+
+plot_low_genes(wilcoxon,"absLFC")
+```
+```{r echo=FALSE, fig.height=8, fig.width=10,message=FALSE, warning=FALSE, cache=TRUE}
+plot_upGOs(wilcoxon, "log2foldChange")
+plot_downGOs(wilcoxon, "log2foldChange")
+```
