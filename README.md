@@ -61,7 +61,7 @@ Open your browser at the address: 'localhost:8888', login with:
 ### Mindmap:
 
 ```mermaid
-    flowchart TD
+    flowchart LR
       subgraph Prepare_files
       A[Start from Rds] --> B{convert scripts}
       C[Start from H5ad] --> B
@@ -88,7 +88,4 @@ Open your browser at the address: 'localhost:8888', login with:
       L --> M
       M --> N([Decide best method])
       end
-mermaid.flowchartConfig = {
-    width: 50%
-}
 ```
