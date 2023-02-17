@@ -61,9 +61,6 @@ Open your browser at the address: 'localhost:8888', login with:
 ### Mindmap:
 
 ```mermaid
-mermaid.flowchartConfig = {
-    width: 50%
-}
     flowchart TD
       subgraph Prepare_files
       A[Start from Rds] --> B{convert scripts}
@@ -91,5 +88,7 @@ mermaid.flowchartConfig = {
       L --> M
       M --> N([Decide best method])
       end
-
+mermaid.flowchartConfig = {
+    width: 50%
+}
 ```
