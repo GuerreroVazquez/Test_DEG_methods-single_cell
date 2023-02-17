@@ -69,7 +69,7 @@ Open your browser at the address: 'localhost:8888', login with:
       B --> E([Rds])
       D --> F([Pseudobulk and desing matrix])
       end
-      Subgraph scDEG
+      subgraph scDEG
       D --> G([scanpy DEG])
       E --> H([Seurat DEG])
       end
