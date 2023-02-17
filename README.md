@@ -63,11 +63,11 @@ Open your browser at the address: 'localhost:8888', login with:
 ```mermaid
     flowchart TD
       subgraph Prepare_files
-      A([Start from Rds]) --> B([convert scripts])
-      C([Start from H5ad]) --> B
-      B --> D([H5ad])
-      B --> E([Rds])
-      D --> F([Pseudobulk and desing matrix])
+      A[Start from Rds] --> B{convert scripts}
+      C[Start from H5ad] --> B
+      B --> D[H5ad]
+      B --> E[Rds]
+      D --> F[Pseudobulk and desing matrix]
       end
       subgraph scDEG
       D --> G([scanpy DEG])
