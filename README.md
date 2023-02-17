@@ -81,6 +81,7 @@ Open your browser at the address: 'localhost:8888', login with:
       end
       subgraph reporting
       G --> M([Report])
+      H --> M
       I --> M
       J --> M
       K --> M
