@@ -39,7 +39,7 @@ Use directly the Rds or H5ad files with scanpy or seurat
 
 Use the outputs from the notebook to obtain the pseudobulks as inputs of the DEG methods (pseudobulk = counts, esperimental desing = design matrix)
 
-## Container:
+### Container:
 
 Clone the repo and buil the container or
 ```
@@ -55,4 +55,38 @@ Open your browser at the address: 'localhost:8888', login with:
 - username: rstudio
 - password: pass (or select a preferred password)
 
-**NOTE**: The container should be run in the same folder with the Rmd files
+**NOTE**: The container should be run in the same folder with the Rmd files#
+
+
+### Mindmap:
+
+```mermaid
+    flowchart TD
+      subgraph Prepare_files
+      A([Start from Rds]) --> B([convert scripts])
+      C([Start from H5ad]) --> B
+      B --> D([H5ad])
+      B --> E([Rds])
+      D --> F([Pseudobulk and desing matrix])
+      end
+      Subgraph scDEG
+      D --> G([scanpy DEG])
+      E --> H([Seurat DEG])
+      end
+      subgraph pseudobulk
+      F --> I([DESeq2 with or without batch correction])
+      F --> J([limma with or without batch correction])
+      F --> K([edgeR with or without batch correction])
+      F --> L([RankProd or wilcoxon with or without batch correction])
+      end
+      subgraph reporting
+      G --> M([Report])
+      E --> M
+      I --> M
+      J --> M
+      K --> M
+      L --> M
+      M --> N([Decide best method])
+      end
+
+```
