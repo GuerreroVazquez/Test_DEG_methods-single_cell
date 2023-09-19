@@ -21,7 +21,7 @@ FROM bioconductor/bioconductor_docker:devel
 
 RUN Rscript -e 'install.packages(c("rmarkdown", "markdown", "tidyverse", \
                 "plyr", "pheatmap", "Seurat",\
-                "VennDiagram"), dependencies = TRUE, repos = "http://cran.us.r-project.org")'
+                "VennDiagram", "svglite", "downloader"), dependencies = TRUE, repos = "http://cran.us.r-project.org")'
 
 RUN Rscript -e 'BiocManager::install(c("sva", "DESeq2", "edgeR", "limma", \
                 "RankProd", "preprocessCore", "clusterProfiler",\
