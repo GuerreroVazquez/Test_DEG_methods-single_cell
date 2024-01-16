@@ -225,6 +225,9 @@ contr13
 contr23 
 ```
 
+# Differential expression analysis
+
+Now that we saw the contrast, contr is condition1 vs condition2 (MiddleAge vs Old)
 
 ```{r}
 tmp <- contrasts.fit(fit, contr)
@@ -238,5 +241,5 @@ top.table <- topTable(tmp, sort.by = "P", n = Inf)%>%
   filter(absFLC >= 0.3) %>%
   filter(adj.P.Val < 0.05)
 
-write.csv(top.table, "limma_combat_mm.csv")
+write.csv(top.table, "limma_combat_microarray.csv")
 ```
