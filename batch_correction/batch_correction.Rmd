@@ -8,15 +8,18 @@ date: "2023-11-29"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+setwd("~/Documents/GitHub/Test_DEG_methods-single_cell/batch_correction")
 
+```
 
 ```{r}
-install.packages("sva")
-install.packages("dplyr")
-install.packages("tidyr")
 library(sva)
-library(dplyr)
-library(tidyr)
+library(plyr)
+library(DESeq2)
+library(tidyverse)
+library(pheatmap)
+library(RColorBrewer)
 ```
 
 
@@ -24,70 +27,49 @@ library(tidyr)
 
 ## Gettin the microarray data
 
-I have the data on results
+Expression.csv is a file where each column is a sample, each row a gene and in each cell I have the expression level. In this specific case is microarray data.
+
+Samples_age_class.csv contains the metadata of each sample, being the most important the Geo_accesion, Experiment and X
 
 ```{r}
-expression_path =  "../batch_correction/Expression.csv"
-  # "../Data/expression_processed/"
-
+expression_path =  "Expression.csv"
+samples_data_path = "Samples_age_class.csv"
 
 
 
 ```
 
 
-I decided to go with GB_ACC, I have all the expression already processed on `expression_path`
 
-Here a Function to read and preprocess each CSV file
 
 ```{r}
-read_and_preprocess <- function(file_path) {
-  file_path <- paste0(expression_path, file_path)
-  df <- read.csv(file_path)
-  
-  # Check if the 'GB_ACC' column is present
-  if ("GB_ACC" %in% colnames(df)) {
-    return(df)
-  } else {
-    return(NULL)
-  }
-}
-
-
-
-if (!file.exists(expression_path)){
-  # List all CSV files in the directory
-  csv_files <- base::list.files(pattern = "\\.csv$", path = expression_path)
-  
-  # Read and preprocess CSV files, filtering those with the 'GB_ACC' column
-  filtered_dfs <- lapply(csv_files, read_and_preprocess)
-  filtered_dfs <- Filter(Negate(is.null), filtered_dfs)
-  
-  # Check if there are any files with the 'GB_ACC' column
-  if (length(filtered_dfs) == 0) {
-    stop("None of the CSV files have the 'GB_ACC' column.")
-  }
-  
-  length(filtered_dfs)
-} else{
-  filtered_dfs<- read.csv(expression_path)
-  
-}
+counts<- read.csv(expression_path)
+exp_design <- read.csv(samples_data_path)
 
 ```
-```{r}
-library(dplyr)
-process_df <- function(df) {
-  # Replace the first column with the 'GB_ACC' column
-  x = make.names(df[,1], unique = TRUE)
-  row.names(df) <- x 
-  df <- df[, -1]
-  
-  return(df)
-}
 
-# Apply the function to each data frame in the list
-filtered_df <- lapply(filtered_dfs, process_df)
+```{r message=FALSE, warning=FALSE}
+counts <- read.csv("Pseudobulk_clean_mm.csv", row.names = "Symbol")
+exp_design <- read.csv("Experiment_design_mm.csv", row.names = "Sample")
+```
+
+```{r message=FALSE, warning=FALSE}
+cts <- as.matrix(counts)
+
+exp_design$Condition <- factor(exp_design$Condition)
+exp_design$Batch <- factor(exp_design$Batch)
+
+batches_unique = unique(sort(exp_design$Batch))
+batches = exp_design$Batch
+batch_seq = seq(0, length(batches_unique))
+batches <- mapvalues(batches, from = batches_unique, to = batch_seq)
+
+exp_design$batch_num <- batches
+todrop = rownames(exp_design[exp_design$batch_num == 3,])
+exp_design <- exp_design[!(row.names(exp_design) %in% todrop),]
+cts <- cts[,colnames(cts)!= todrop]
+batches = exp_design$batch_num
+batches <- as.numeric(batches)
 ```
 
 
