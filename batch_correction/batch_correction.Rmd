@@ -53,7 +53,17 @@ Here I convert the counts (expression) to matrix, then get the X (age group) and
 
 rownames(counts) <- counts[,1]
 counts <- counts[,-1]
+colnames(counts) <- sub("\\.1$", "", colnames(counts))
+
 ```
+
+I found that there were 40 columns that repeat (at the end of the dataframe), so I will just remove them
+```{r}
+counts <- counts[1:(length(counts)-40)]
+
+```
+
+
 
 ```{r message=FALSE, warning=FALSE}
 cts <- as.matrix(counts)
@@ -86,13 +96,17 @@ rownames(exp_design) <- exp_design[,4]
 
 ```
 
+
 Currently I have more samples in the exp_desing than the ones that I evaluate so I need to remove them
 ```{r}
 # Get the subset of exp_design with row names present in counts
 result <- subset(exp_design, rownames(exp_design) %in% colnames(counts))
-
+#colnames ( subset(counts, colnames(counts)  %in% rownames(exp_design)) ) 
+#rownames ( subset(exp_design, rownames(exp_design) %in% colnames(counts)) )
 result
-
+setdiff(rownames(exp_design), rownames(result))
+setdiff(colnames(counts), rownames(result))
+setdiff(colnames(counts), rownames(exp_design))
 ```
 
 
