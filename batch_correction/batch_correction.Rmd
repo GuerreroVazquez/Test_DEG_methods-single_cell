@@ -49,11 +49,6 @@ exp_design <- read.csv(samples_data_path)
 ```
 
 ```{r message=FALSE, warning=FALSE}
-counts <- read.csv("Pseudobulk_clean_mm.csv", row.names = "Symbol")
-exp_design <- read.csv("Experiment_design_mm.csv", row.names = "Sample")
-```
-
-```{r message=FALSE, warning=FALSE}
 cts <- as.matrix(counts)
 
 exp_design$Condition <- factor(exp_design$Condition)
