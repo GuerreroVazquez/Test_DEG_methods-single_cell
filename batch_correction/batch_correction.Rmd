@@ -40,33 +40,67 @@ samples_data_path = "Samples_age_class.csv"
 ```
 
 
-
-
 ```{r}
 counts<- read.csv(expression_path)
 exp_design <- read.csv(samples_data_path)
 
 ```
 
+
+Here I convert the counts (expression) to matrix, then get the X (age group) and Experiment from the metadata of the samples.
+
+```{r}
+
+rownames(counts) <- counts[,1]
+counts <- counts[,-1]
+```
+
 ```{r message=FALSE, warning=FALSE}
 cts <- as.matrix(counts)
 
-exp_design$Condition <- factor(exp_design$Condition)
-exp_design$Batch <- factor(exp_design$Batch)
+exp_design$Condition <- factor(exp_design$X)
+exp_design$Batch <- factor(exp_design$Experiment)
 
-batches_unique = unique(sort(exp_design$Batch))
-batches = exp_design$Batch
-batch_seq = seq(0, length(batches_unique))
+batches_unique = unique(sort(exp_design$Experiment))
+batches = exp_design$Experiment
+batch_seq = seq(1, length(batches_unique))
 batches <- mapvalues(batches, from = batches_unique, to = batch_seq)
 
 exp_design$batch_num <- batches
-todrop = rownames(exp_design[exp_design$batch_num == 3,])
-exp_design <- exp_design[!(row.names(exp_design) %in% todrop),]
-cts <- cts[,colnames(cts)!= todrop]
 batches = exp_design$batch_num
 batches <- as.numeric(batches)
 ```
 
+Now I have my batches defined, I will now get them by condition (X)
+```{r}
+cl_unique = unique(sort(exp_design$X))
+cl = exp_design$X
+condition_seq = seq(1, length(cl_unique))
+cl = mapvalues(cl, from = cl_unique, to = condition_seq)
+```
+I need the col names to be the gene names in case of the expression (counts) and the sample (geo_accesion) for the exp_desing.
+
+```{r}
+rownames(exp_design) <- exp_design[,4]
+# exp_design <- exp_design[,-4]   ; This one is not necesary 
+
+```
+
+Currently I have more samples in the exp_desing than the ones that I evaluate so I need to remove them
+```{r}
+# Get the subset of exp_design with row names present in counts
+result <- subset(exp_design, rownames(exp_design) %in% colnames(counts))
+
+result
+
+```
+
+
+Now I have both, so I will get...  ComBat_seqs(?) 
+*Note: what is that?
+```{r}
+adjusted <- ComBat_seq(cts, batch=batches, group=NULL)
+```
 
 
 
