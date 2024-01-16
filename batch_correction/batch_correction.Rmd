@@ -117,7 +117,7 @@ log_counts <- log2(clean_counts + 1)
 cts <- as.matrix(log_counts)
 #cts[is.na(cts)] <- 0
 #cts[cts < 0] <- 0
-adjusted <- ComBat_seq(cts, batch=batches, group=NULL)
+adjusted <- ComBat_seq(cts, batch=batches, group=NULL)  # change thso to combat vanilla
 ```
 
 
@@ -228,6 +228,7 @@ contr23
 # Differential expression analysis
 
 Now that we saw the contrast, contr is condition1 vs condition2 (MiddleAge vs Old)
+ empirical Bayes moderation
 
 ```{r}
 tmp <- contrasts.fit(fit, contr)
@@ -242,4 +243,20 @@ top.table <- topTable(tmp, sort.by = "P", n = Inf)%>%
   filter(adj.P.Val < 0.05)
 
 write.csv(top.table, "limma_combat_microarray.csv")
+```
+
+# Volcano plot
+
+Let's make our friend Volcanito
+
+```{r}
+library(ggplot2)
+
+top.table_nF <- topTable(tmp, sort.by = "P", n = Inf)
+ggplot(top.table, aes(x = logFC, y = -adj.P.Val)) +
+  geom_point(aes(color = ifelse(abs(logFC) >= 1 & adj.P.Val < 0.05, "red", "black"))) +
+  theme_minimal() +
+  labs(x = "log2(Fold Change)", y = "-adj.P.Val", color = "Significant")
+
+
 ```
