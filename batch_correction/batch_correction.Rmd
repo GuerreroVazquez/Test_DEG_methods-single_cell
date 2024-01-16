@@ -64,12 +64,31 @@ counts <- counts[1:(length(counts)-40)]
 ```
 
 
+I need the col names to be the gene names in case of the expression (counts) and the sample (geo_accesion) for the exp_desing.
 
-```{r message=FALSE, warning=FALSE}
-cts <- as.matrix(counts)
+```{r}
+rownames(exp_design) <- exp_design[,4]
+# exp_design <- exp_design[,-4]   ; This one is not necesary 
+
+```
+
+
+Currently I have more samples in the exp_desing than the ones that I evaluate so I need to remove them
+```{r}
+# Get the subset of exp_design with row names present in counts
+exp_design <- subset(exp_design, rownames(exp_design) %in% colnames(counts))
+clean_counts <- counts[, intersect(colnames(counts), rownames(exp_design))]
 
 exp_design$Condition <- factor(exp_design$X)
 exp_design$Batch <- factor(exp_design$Experiment)
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+
+
 
 batches_unique = unique(sort(exp_design$Experiment))
 batches = exp_design$Experiment
@@ -88,31 +107,16 @@ cl = exp_design$X
 condition_seq = seq(1, length(cl_unique))
 cl = mapvalues(cl, from = cl_unique, to = condition_seq)
 ```
-I need the col names to be the gene names in case of the expression (counts) and the sample (geo_accesion) for the exp_desing.
-
-```{r}
-rownames(exp_design) <- exp_design[,4]
-# exp_design <- exp_design[,-4]   ; This one is not necesary 
-
-```
-
-
-Currently I have more samples in the exp_desing than the ones that I evaluate so I need to remove them
-```{r}
-# Get the subset of exp_design with row names present in counts
-result <- subset(exp_design, rownames(exp_design) %in% colnames(counts))
-#colnames ( subset(counts, colnames(counts)  %in% rownames(exp_design)) ) 
-#rownames ( subset(exp_design, rownames(exp_design) %in% colnames(counts)) )
-result
-setdiff(rownames(exp_design), rownames(result))
-setdiff(colnames(counts), rownames(result))
-setdiff(colnames(counts), rownames(exp_design))
-```
 
 
 Now I have both, so I will get...  ComBat_seqs(?) 
 *Note: what is that?
 ```{r}
+log_counts <- log2(clean_counts + 1)
+cts <- as.matrix(log_counts)
+#cts[is.na(cts)] <- 0
+#cts[cts < 0] <- 0
+adjusted <- ComBat_seq(cts, batch=batches, group=NULL)
 adjusted <- ComBat_seq(cts, batch=batches, group=NULL)
 ```
 
@@ -220,8 +224,6 @@ combat_result <- sva::ComBat(dat = master_df,
 master_df
 write.csv(master_df, "master_df")
 ```
-
-
 
 
 
