@@ -17,6 +17,7 @@ setwd("~/Documents/GitHub/Test_DEG_methods-single_cell/batch_correction")
 library(sva)
 library(plyr)
 library(DESeq2)
+library(edgeR)
 library(tidyverse)
 library(pheatmap)
 library(RColorBrewer)
@@ -120,3 +121,122 @@ adjusted <- ComBat_seq(cts, batch=batches, group=NULL)
 ```
 
 
+
+Now I adjusted the batches... 
+
+```{r}
+print("1,5")
+adjusted[1,5]
+#log_counts[1,5]
+clean_counts[1,5]
+
+print("2,5")
+adjusted[2,5]
+#log_counts[2,5]
+clean_counts[2,5]
+
+print("2,50")
+adjusted[2,50]
+#log_counts[2,50]
+clean_counts[2,50]
+
+print("1,6")
+adjusted[1,6]
+#log_counts[1,6]
+clean_counts[1,6]
+
+print("10,30")
+adjusted[10,30]
+#log_counts[10,30]
+clean_counts[10,30]
+```
+
+
+#  normalization of count data,
+
+DGEList is a function from the edgeR package
+
+The DGEList function takes the count matrix as input and creates an object of class DGEList, which is a specialized data structure in edgeR for holding count data and related information. AKA, just converting on a datastructure of the package
+
+calcNormFactors is used to calculate normalization factors for the count data stored in a DGEList object.It is based on the trimmed mean of M values (TMM) method. 
+
+* Calculate Ratios: Calculate the log-ratios of counts for each gene between pairs of samples.
+
+* Trimming: Trim a certain percentage of genes with extreme log-ratios, typically 5% from each tail.
+
+* Calculate Scaling Factors: Use the trimmed log-ratios to calculate scaling factors for each sample, ensuring that the median scaling factor is 1.
+
+* Normalization: Divide the counts in each sample by its corresponding scaling factor to obtain normalized counts.
+
+NOTE: Watch this : https://www.youtube.com/watch?v=G0qMS-o6r4M
+
+```{r}
+d0 <- DGEList(cts)
+d0 <- calcNormFactors(d0)
+```
+
+Renaming, not big deal
+```{r}
+snames <- colnames(cts) # Sample names
+conditions <- interaction(cl)
+```
+
+
+# Create model
+
+model.matrix creates a design matrix for a linear mode that uses conditions and batches as predictors
+*WHY?*
+The voom function is part of the limma package and is commonly used for preprocessing RNA-Seq count data before applying linear modeling. It converts count data (d0) into a suitable format for linear modeling and empirical Bayes analysis.
+d0 is the count matrix, mm the model just created.
+
+```{r}
+mm <- model.matrix(~ 0 + conditions + batches)
+y <- voom(d0, mm, plot = T)
+```
+
+
+# Non-Linear Least Squares Minimization
+
+Fit the previous designed model with a Non-linear least squares minimization model with the transformed data y, that is the normalized form of the expression data (that I already made log)
+
+The coef() function is applied to the fitted model (fit) to extract the coefficients.
+In the context of linear models, the coefficients represent the estimated effects of each predictor variable in the model.
+
+
+```{r}
+fit <- lmFit(y, mm)
+head(coef(fit))
+```
+
+# Contrast
+
+ The makeContrasts function is used to create linear combinations (contrasts) of coefficients from a linear model fitted to the data. 
+ * These contrasts are often used to test specific hypotheses about the differences between experimental conditions.*
+ 
+ Ok, as I undestand, the contrast mark the change from condition_m to condition_n. FOr condition m and n I expect weather 1 or -1, and the other conditions should be 0 because they should not intervine (?) and if they do is because they are related. 
+ Batches here is 0 in all the 3 changes, so it is not impacting the age. 
+ 
+```{r}
+contr <- makeContrasts(conditions1 - conditions2, levels = colnames(coef(fit)))
+contr
+contr13 <- makeContrasts(conditions1 - conditions3, levels = colnames(coef(fit)))
+contr23 <- makeContrasts(conditions3 - conditions2, levels = colnames(coef(fit)))
+contr13
+contr23 
+```
+
+
+```{r}
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+```
+
+
+```{r}
+top.table <- topTable(tmp, sort.by = "P", n = Inf)%>%
+  mutate(absFLC = abs(logFC)) %>%
+  filter(absFLC >= 0.3) %>%
+  filter(adj.P.Val < 0.05)
+
+write.csv(top.table, "limma_combat_mm.csv")
+```
