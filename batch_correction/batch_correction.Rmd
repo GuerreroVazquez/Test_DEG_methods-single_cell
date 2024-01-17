@@ -265,8 +265,8 @@ head(coef(fit_pos))
  Batches here is 0 in all the 3 changes, so it is not impacting the age. 
  
 ```{r}
-fit = fit_pre
-title = "limma_combat_microarray_pre.csv"
+fit = fit_pos
+title = "limma_combat_microarray_pos.csv"
 
 mvso <- makeContrasts(conditions1 - conditions2, levels = colnames(coef(fit)))
 yvsm <- makeContrasts(conditions3 - conditions1, levels = colnames(coef(fit)))
@@ -306,7 +306,23 @@ top.table_nF <- topTable(tmp, sort.by = "P", n = Inf)
 ggplot(top.table_nF, aes(x = logFC, y = -log10(adj.P.Val))) +
   geom_point(aes(color = ifelse(abs(logFC) >= 1 & (adj.P.Val) < 0.05, "NS", "S"))) +
   theme_minimal() +
-  labs(x = "log2(Fold Change)", y = "log10 adj.P.Val", color = "Significant")
+  labs(x = "log2(Fold Change)", y = "log10 adj.P.Val", color = "Significant", title = "Pre adjustment Volcano plot")
 
 
 ```
+
+
+```{r}
+library(ggplot2)
+
+top.table_nF <- topTable(tmp, sort.by = "P", n = Inf)
+ggplot(top.table_nF, aes(x = logFC, y = -log10(adj.P.Val))) +
+  geom_point(aes(color = ifelse(abs(logFC) >= 1 & (adj.P.Val) < 0.05, "NS", "S"))) +
+  theme_minimal() +
+  labs(x = "log2(Fold Change)", y = "log10 adj.P.Val", color = "Significant", title = "Pos adjustment Volcano plot")
+
+
+```
+
+
+
