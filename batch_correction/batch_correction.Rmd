@@ -8,7 +8,7 @@ date: "2023-11-29"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 setwd("~/Documents/GitHub/Test_DEG_methods-single_cell/batch_correction")
 
 ```
@@ -114,9 +114,11 @@ Now I have both, so I will get...  ComBat_seqs(?)
 *Note: what is that?
 ```{r}
 #log_counts <- log2(clean_counts + 1)
-cts <- as.matrix(counts)
+cts <- as.matrix(clean_counts)
+#cts <- as.matrix(log_counts)
+
 cts[is.na(cts)] <- 0
-#cts[cts < 0] <- 0
+cts[cts < 0] <- 0
 adjusted <- ComBat(cts, batch=batches)  # change thso to combat vanilla
 ```
 
@@ -169,11 +171,46 @@ calcNormFactors is used to calculate normalization factors for the count data st
 * Normalization: Divide the counts in each sample by its corresponding scaling factor to obtain normalized counts.
 
 NOTE: Watch this : https://www.youtube.com/watch?v=G0qMS-o6r4M
+gset and the comparisons, in this case we have 3 groups
+```{r}
+library(limma)
+
+# Assuming 'd0' is your DGEList object
+d0 <- calcNormFactors(cts)
+
+
+```
+
+How many negatives and NAN do I have?
+```{r}
+ctsx <- as.matrix(clean_counts)
+
+num_genes_with_negative_values <- length( apply(ctsx, 1, function(row) any(row < 0)) )
+total_negative_numbers <-sum(ctsx < 0, na.rm = TRUE)
+
+num_genes_with_negative_values
+total_negative_numbers
+
+ctsx <- ctsx[complete.cases(ctsx), , drop = FALSE]
+
+
+
+```
+```{r}
+ctsx[ctsx < 0] <- 0
+adjusted <- ComBat(ctsx, batch=batches)
+adjusted[adjusted < 0] <- 0
+```
+
+
+
 
 ```{r}
-d0 <- DGEList(cts)
+d0 <- DGEList(ctsx)
 d0 <- calcNormFactors(d0)
 ```
+
+
 ```{r}
 
 d02 <- DGEList(adjusted)
@@ -197,13 +234,9 @@ The voom function is part of the limma package and is commonly used for preproce
 d0 is the count matrix, mm the model just created.
 
 ```{r}
-mm <- model.matrix(~ 0 + conditions + batches)
-y <- voom(d0, mm, plot = T)
-```
-
-```{r}
-mm <- model.matrix(~ 0 + conditions + batches)
-y <- voom(d02, mm, plot = T)
+mm <- model.matrix(~ 0 + conditions + batches, data=exp_design)
+y_pre <- voom(d0, mm, plot = T)
+y_pos <- voom(d02, mm, plot = T)
 ```
 
 
@@ -217,8 +250,10 @@ In the context of linear models, the coefficients represent the estimated effect
 
 
 ```{r}
-fit <- lmFit(y, mm)
-head(coef(fit))
+fit_pre <- lmFit(y_pre, mm)
+fit_pos <- lmFit(y_pos, mm)
+head(coef(fit_pre))
+head(coef(fit_pos))
 ```
 
 # Contrast

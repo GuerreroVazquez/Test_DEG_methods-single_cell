@@ -112,3 +112,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.local/share/rstudio/*
+.Rhistory
+.config/rstudio/rstudio-prefs.json
+*lock.*.csv#
