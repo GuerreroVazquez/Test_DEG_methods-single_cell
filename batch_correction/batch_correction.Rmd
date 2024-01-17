@@ -265,12 +265,11 @@ head(coef(fit_pos))
  Batches here is 0 in all the 3 changes, so it is not impacting the age. 
  
 ```{r}
-contr <- makeContrasts(conditions1 - conditions2, levels = colnames(coef(fit)))
-contr
-contr13 <- makeContrasts(conditions1 - conditions3, levels = colnames(coef(fit)))
-contr23 <- makeContrasts(conditions3 - conditions2, levels = colnames(coef(fit)))
-contr13
-contr23 
+mvso <- makeContrasts(conditions1 - conditions2, levels = colnames(coef(fit_pos)))
+yvsm <- makeContrasts(conditions3 - conditions1, levels = colnames(coef(fit_pos)))
+yvso <- makeContrasts(conditions3 - conditions2, levels = colnames(coef(fit_pos)))
+
+mvso
 ```
 
 # Differential expression analysis
@@ -279,7 +278,7 @@ Now that we saw the contrast, contr is condition1 vs condition2 (MiddleAge vs Ol
  empirical Bayes moderation
 
 ```{r}
-tmp <- contrasts.fit(fit, contr)
+tmp <- contrasts.fit(fit_pos, mvso)
 tmp <- eBayes(tmp)
 ```
 
@@ -290,7 +289,7 @@ top.table <- topTable(tmp, sort.by = "P", n = Inf)%>%
   filter(absFLC >= 0.3) %>%
   filter(adj.P.Val < 0.05)
 
-write.csv(top.table, "limma_combat_microarray_pre.csv")
+write.csv(top.table, "limma_combat_microarray_pos.csv")
 ```
 
 # Volcano plot
