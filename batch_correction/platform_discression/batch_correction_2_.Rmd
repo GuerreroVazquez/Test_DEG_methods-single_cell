@@ -1,0 +1,442 @@
+---
+title: "Batch_correction"
+output: html_document
+date: "2023-11-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE, include=FALSE}
+setwd("~/batch_correction/platform_discression/")
+
+```
+
+```{r}
+library(sva)
+library(plyr)
+library(DESeq2)
+library(edgeR)
+library(tidyverse)
+library(pheatmap)
+library(RColorBrewer)
+```
+
+
+
+
+## Gettin the microarray data
+
+Expression.csv is a file where each column is a sample, each row a gene and in each cell I have the expression level. In this specific case is microarray data.
+
+Samples_age_class.csv contains the metadata of each sample, being the most important the Geo_accesion, Experiment and X
+
+```{r}
+expression_path =  "trainign_dataset_51280_microarray_unadjusted.csv"
+samples_data_path = "Samples_age_class.csv"
+
+
+
+```
+
+
+```{r}
+counts<- read.csv(expression_path)
+exp_design <- read.csv(samples_data_path)
+
+```
+
+
+Here I convert the counts (expression) to matrix, then get the X (age group) and Experiment from the metadata of the samples.
+
+```{r}
+
+rownames(counts) <- counts[,1]
+counts <- counts[,-1]
+
+#colnames(counts) <- counts[1,]
+#counts<- as.matrix(t(counts))
+counts
+```
+
+```{r}
+counts <- data.frame(t(counts), row.names = colnames(counts), check.names = FALSE)
+counts
+```
+
+
+I need the col names to be the gene names in case of the expression (counts) and the sample (geo_accesion) for the exp_desing.
+
+```{r}
+rownames(exp_design) <- exp_design[,4]
+
+```
+
+
+Currently I have more samples in the exp_desing than the ones that I evaluate so I need to remove them
+```{r}
+# Get the subset of exp_design with row names present in counts
+exp_design <- subset(exp_design, rownames(exp_design) %in% colnames(counts))
+clean_counts <- counts[, intersect(colnames(counts), rownames(exp_design))]
+
+exp_design$Condition <- factor(exp_design$X)
+exp_design$Batch <- factor(exp_design$Experiment)
+```
+
+```{r}
+colnames(counts)
+rownames(exp_design)
+clean_counts
+```
+
+Now I want to get the batches
+
+```{r message=FALSE, warning=FALSE}
+
+
+batches_unique = unique(sort(exp_design$Experiment))
+batches = exp_design$Experiment
+batch_seq = seq(1, length(batches_unique))
+batches <- mapvalues(batches, from = batches_unique, to = batch_seq)
+
+exp_design$batch_num <- batches
+batches = exp_design$batch_num
+batches <- as.numeric(batches)
+
+```
+
+Batches is not working... I have one sample left
+```{r}
+length(batches)
+class(batches)
+```
+
+
+Now I have my batches defined, I will now get them by condition (X)
+```{r}
+cl_unique = unique(sort(exp_design$X))
+cl = exp_design$X
+condition_seq = seq(1, length(cl_unique))
+cl = mapvalues(cl, from = cl_unique, to = condition_seq)
+```
+
+
+Now I have both, so I will get...  ComBat_seqs correction
+I have cts as the original, adjusted as the corrected
+```{r}
+#log_counts <- log2(clean_counts + 1)
+cts <- as.matrix(clean_counts)
+#cts <- as.matrix(log_counts)
+mod = model.matrix(~as.factor(X), data=exp_design)
+cts[is.na(cts)] <- 0
+cts[cts < 0] <- 0
+adjusted <- ComBat(dat=cts, batch=batches, mod=NULL)  # change thso to combat vanilla
+adjusted_limma <- removeBatchEffect(cts, batch=batches)
+```
+
+
+
+Now I adjusted the batches... 
+
+```{r}
+print("1,5")
+adjusted[1,5]
+#log_counts[1,5]
+clean_counts[1,5]
+
+print("2,5")
+adjusted[2,5]
+#log_counts[2,5]
+clean_counts[2,5]
+
+print("2,50")
+adjusted[2,50]
+#log_counts[2,50]
+clean_counts[2,50]
+
+print("1,6")
+adjusted[1,6]
+#log_counts[1,6]
+clean_counts[1,6]
+
+print("10,30")
+adjusted[10,30]
+#log_counts[10,30]
+clean_counts[10,30]
+```
+
+
+#  normalization of count data,
+
+DGEList is a function from the edgeR package
+
+The DGEList function takes the count matrix as input and creates an object of class DGEList, which is a specialized data structure in edgeR for holding count data and related information. AKA, just converting on a datastructure of the package
+
+calcNormFactors is used to calculate normalization factors for the count data stored in a DGEList object.It is based on the trimmed mean of M values (TMM) method. 
+
+* Calculate Ratios: Calculate the log-ratios of counts for each gene between pairs of samples.
+
+* Trimming: Trim a certain percentage of genes with extreme log-ratios, typically 5% from each tail.
+
+* Calculate Scaling Factors: Use the trimmed log-ratios to calculate scaling factors for each sample, ensuring that the median scaling factor is 1.
+
+* Normalization: Divide the counts in each sample by its corresponding scaling factor to obtain normalized counts.
+
+NOTE: Watch this : https://www.youtube.com/watch?v=G0qMS-o6r4M
+gset and the comparisons, in this case we have 3 groups
+
+
+How many negatives and NAN do I have?
+```{r}
+ctsx <- as.matrix(clean_counts)
+
+num_genes_with_negative_values <- length( apply(ctsx, 1, function(row) any(row < 0)) )
+total_negative_numbers <-sum(ctsx < 0, na.rm = TRUE)
+
+num_genes_with_negative_values
+total_negative_numbers
+
+ctsx <- ctsx[complete.cases(ctsx), , drop = FALSE]
+
+
+
+```
+
+
+# VIsualising the data PCA
+
+```{r}
+# ctxs is the counts before the batch correctuion
+# adjusted is the adjusted count matrix.
+
+library(ggplot2)
+#library(prcomp)
+
+# Perform PCA on the original data (before batch correction)
+pca_original <- prcomp(t(ctsx), scale. = TRUE)
+
+# Perform PCA on the batch-corrected data
+pca_corrected <- prcomp(t(adjusted), scale. = TRUE)
+
+# Create a data frame for plotting
+pca_data <- data.frame(
+  Sample = rownames(t(ctsx)),
+  PC1_original = pca_original$x[,1],
+  PC2_original = pca_original$x[,2],
+  PC1_corrected = pca_corrected$x[,1],
+  PC2_corrected = pca_corrected$x[,2]
+)
+
+# Plot PCA
+ggplot(pca_data, aes(x = PC1_original, y = PC2_original, color = "Original")) +
+  geom_point() +
+  geom_point(aes(x = PC1_corrected, y = PC2_corrected, color = "Corrected")) +
+  labs(title = "PCA Plot before and after Batch Correction") +
+  theme_minimal()
+
+```
+
+
+```{r}
+pca_data_original <- data.frame(
+  Sample = rownames(t(ctsx)),
+  PC1_original = pca_original$x[,1],
+  PC2_original = pca_original$x[,2],
+  Age = factor(exp_design$X)
+)
+
+ggplot(pca_data_original, aes(x = PC1_original, y = PC2_original, color = Age)) +
+  geom_point() +
+  labs(title = "PCA Plot before Batch Correction") +
+  theme_minimal()
+
+```
+```{r}
+pca_data_original <- data.frame(
+  Sample = rownames(t(ctsx)),
+  PC1_original = pca_original$x[,1],
+  PC2_original = pca_original$x[,2],
+  Age = factor(exp_design$X),
+  Experiment = factor(exp_design$Experiment)
+)
+
+ggplot(pca_data_original, aes(x = PC1_original, y = PC2_original, color = Experiment)) +
+  geom_point() +
+  labs(title = "PCA Plot before Batch Correction") +
+  theme_minimal()
+
+```
+
+```{r}
+pca_data_adjusted <- data.frame(
+  Sample = rownames(t(adjusted)),
+  PC1_corrected = pca_corrected$x[,1],
+  PC2_corrected = pca_corrected$x[,2],
+  Age = factor(exp_design$X),
+  Experiment = factor(exp_design$Experiment)
+)
+
+ggplot(pca_data_adjusted, aes(x = PC1_corrected, y = PC2_corrected, color = Age)) +
+  geom_point() +
+  labs(title = "PCA Plot after Batch Correction") +
+  theme_minimal()
+
+```
+
+
+```{r}
+pca_corrected <- prcomp(t(adjusted), scale. = TRUE)
+
+pca_data_adjusted <- data.frame(
+  Sample = rownames(t(adjusted)),
+  PC1_corrected = pca_corrected$x[,1],
+  PC2_corrected = pca_corrected$x[,2],
+  Age = factor(exp_design$X),
+  Experiment = factor(exp_design$Experiment)
+)
+
+ggplot(pca_data_adjusted, aes(x = PC1_corrected, y = PC2_corrected, color = Experiment)) +
+  geom_point() +
+  labs(title = "PCA Plot after Batch Correction") +
+  theme_minimal()
+
+```
+
+# remove batct
+```{r}
+
+cts_matrix <- as.matrix(cts)
+
+# Perform batch correction
+batch_corrected_data <- removeBatchEffect(cts_matrix, batch = batches)
+
+```
+
+```{r}
+
+# Perform PCA on the batch-corrected data
+t_bc = t(batch_corrected_data)
+pca_corrected <- prcomp(t_bc, scale. = TRUE)
+
+pca_data_adjusted <- data.frame(
+  Sample = rownames(t_bc),
+  PC1_corrected = pca_corrected$x[,1],
+  PC2_corrected = pca_corrected$x[,2],
+  Age = factor(exp_design$X),
+  Experiment = factor(exp_design$Experiment)
+)
+
+ggplot(pca_data_adjusted, aes(x = PC1_corrected, y = PC2_corrected, color = Experiment)) +
+  geom_point() +
+  labs(title = "PCA Plot after Batch Correction with limma") +
+  theme_minimal()
+
+```
+
+## RUVSeq
+
+```{r}
+library(RUVSeq)
+
+# Convert cts to a matrix
+cts_matrix <- as.matrix(cts)
+
+# Perform batch correction
+batch_corrected_data <- RUVg(x = cts_matrix, k = 1, cIdx = batches)
+
+# Extract batch-corrected counts
+batch_corrected_counts <- batch_corrected_data$normalizedCounts
+
+# Convert back to dataframe with genes as rows and sources as columns
+batch_corrected_df <- as.data.frame(batch_corrected_counts, row.names = rownames(cts_matrix))
+
+```
+
+```{r}
+pca_corrected <- prcomp(t(batch_corrected_df), scale. = TRUE)
+pca_data_adjusted <- data.frame(
+  Sample = rownames(t(batch_corrected_df)),
+  PC1_corrected = pca_corrected$x[,1],
+  PC2_corrected = pca_corrected$x[,2],
+  Age = factor(exp_design$X),
+  Experiment = factor(exp_design$Experiment)
+)
+
+ggplot(pca_data_adjusted, aes(x = PC1_corrected, y = PC2_corrected, color = Experiment)) +
+  geom_point() +
+  labs(title = "PCA Plot after Batch Correction with RUVSeq") +
+  theme_minimal()
+
+
+```
+
+## A mi manera
+
+```{r}
+
+spectral_clustering <- function(X, # matrix of data points
+                                nn = 10, # the k nearest neighbors to consider
+                                n_eig = 2) # m number of eignenvectors to keep
+{
+  mutual_knn_graph <- function(X, nn = 10)
+  {
+    D <- as.matrix( dist(X) ) # matrix of euclidean distances between data points in X
+    
+    # intialize the knn matrix
+    knn_mat <- matrix(0,
+                      nrow = nrow(X),
+                      ncol = nrow(X))
+    
+    # find the 10 nearest neighbors for each point
+    for (i in 1: nrow(X)) {
+      neighbor_index <- order(D[i,])[2:(nn + 1)]
+      knn_mat[i,][neighbor_index] <- 1 
+    }
+   
+    # Now we note that i,j are neighbors iff K[i,j] = 1 or K[j,i] = 1 
+    knn_mat <- knn_mat + t(knn_mat) # find mutual knn
+    
+    knn_mat[ knn_mat == 2 ] = 1
+    
+    return(knn_mat)
+  }
+  
+  graph_laplacian <- function(W, normalized = TRUE)
+  {
+    stopifnot(nrow(W) == ncol(W)) 
+    
+    g = colSums(W) # degrees of vertices
+    n = nrow(W)
+    
+    if(normalized)
+    {
+      D_half = diag(1 / sqrt(g) )
+      return( diag(n) - D_half %*% W %*% D_half )
+    }
+    else
+    {
+      return( diag(g) - W )
+    }
+  }
+  
+  W = mutual_knn_graph(X) # 1. matrix of similarities
+  L = graph_laplacian(W) # 2. compute graph laplacian
+  ei = eigen(L, symmetric = TRUE) # 3. Compute the eigenvectors and values of L
+  n = nrow(L)
+  return(ei$vectors[,(n - n_eig):(n - 1)]) # return the eigenvectors of the n_eig smallest eigenvalues
+
+}
+
+# do spectral clustering procedure
+
+X_sc <- spectral_clustering(cts)
+
+# run kmeans on the 2 eigenvectors
+X_sc_kmeans <- kmeans(X_sc, 14)
+
+
+```
+
+
+
