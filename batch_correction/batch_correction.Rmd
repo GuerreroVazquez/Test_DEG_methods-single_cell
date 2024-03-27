@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r eval=FALSE, include=FALSE}
-setwd("~/Documents/GitHub/Test_DEG_methods-single_cell/batch_correction")
+setwd("~/batch_correction")
 
 ```
 
