@@ -116,3 +116,4 @@ dmypy.json
 .Rhistory
 .config/rstudio/rstudio-prefs.json
 *lock.*.csv#
+*.csv
